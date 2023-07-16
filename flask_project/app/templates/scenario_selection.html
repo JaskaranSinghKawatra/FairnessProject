@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h1>Scenario Selection Page</h1>
+  <p>Select 1 for Scenario 1 and 2 for Scenario 2</p>
+  <form method='POST'>
+    {{ form.hidden_tag() }}
+    {{ form.scenario.label }} {{ form.scenario() }}<br>
+    <input type='submit' value='Submit'>
+  </form>
+{% endblock %}

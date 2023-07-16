@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h1>Scenario 2: Sensitive Information Unavailable</h1>
+  <p>Submit to go back to the home page</p>
+  <form method='POST'>
+    {{ form.hidden_tag() }}
+    <input type='submit' value='Submit'>
+  </form>
+{% endblock %}
