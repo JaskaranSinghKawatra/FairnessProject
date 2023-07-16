@@ -31,3 +31,4 @@ def train_model(self, file_path, target_variable, sensitive_attribute):
     auc_score = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
 
     return predictions.tolist(), model_accuracy, auc_score
+

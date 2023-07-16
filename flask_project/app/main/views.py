@@ -13,6 +13,7 @@ from sklearn.linear_model import LogisticRegression
 from app import celery
 from sklearn.metrics import roc_auc_score
 from app.main.tasks import train_model
+import time
 
 
 
@@ -70,12 +71,16 @@ def scenario_1():
         session['sensitive_attribute'] = form.sensitive_attribute.data
         session['target_variable'] = form.target_variable.data
 
+        print('file_path:', session['file_path'])
+        print('target_variable:', session['target_variable'])
+        print('sensitive_attribute:', session['sensitive_attribute'])
+
         # Start the Celery task and save the task ID to the session
         #task = celery.send_task('app.main.views.train_model', args=[session['file_path'], session['target_variable'], session['sensitive_attribute']])
         task = train_model.delay(session['file_path'], session['target_variable'], session['sensitive_attribute'])
-
+        #task = add.delay(4, 6)
         session['task_id'] = str(task.id)
-
+        time.sleep(5)
         return redirect(url_for('main.results'))
     return render_template('scenario_1.html', form=form)
 
