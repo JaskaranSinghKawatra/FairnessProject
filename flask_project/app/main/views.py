@@ -80,7 +80,7 @@ def scenario_1():
         task = train_model.delay(session['file_path'], session['target_variable'], session['sensitive_attribute'])
         #task = add.delay(4, 6)
         session['task_id'] = str(task.id)
-        time.sleep(5)
+        time.sleep(80)
         return redirect(url_for('main.results'))
     return render_template('scenario_1.html', form=form)
 
