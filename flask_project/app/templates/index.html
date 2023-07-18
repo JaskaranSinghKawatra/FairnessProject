@@ -4,7 +4,15 @@
   <h1>Home Page</h1>
   <form method='POST' enctype="multipart/form-data">
     {{ form.hidden_tag() }}
-    {{ form.fairness_definition.label }} {{ form.fairness_definition() }}<br>
+
+    {% for subfield in form.fairness_definition %}
+      <div>
+        <input type="radio" id="{{ subfield.id }}" name="{{ subfield.name }}" value="{{ subfield.data }}">
+        <label for="{{ subfield.id }}">{{ subfield.label.text }}</label>
+        <p>{{ form.fairness_definitions[subfield.data] }}</p>
+      </div>
+    {% endfor %}
+
     {{ form.file_upload.label }} {{ form.file_upload() }}<br>
     <input type='submit' value='Submit'>
   </form>

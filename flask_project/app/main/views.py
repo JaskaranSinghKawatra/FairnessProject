@@ -12,7 +12,7 @@ from sklearn.linear_model import LogisticRegression
 #from celery import Celery
 from app import celery
 from sklearn.metrics import roc_auc_score
-from app.main.tasks import train_model
+from app.main.tasks import run_training
 import time
 
 
@@ -30,6 +30,7 @@ def index():
     form = HomePageForm()
     if form.validate_on_submit():
         session['fairness_definition'] = form.fairness_definition.data
+        # print(session['fairness_definition'])
         file = form.file_upload.data
 
         if file and allowed_file(file.filename):
@@ -70,14 +71,17 @@ def scenario_1():
     if form.validate_on_submit():
         session['sensitive_attribute'] = form.sensitive_attribute.data
         session['target_variable'] = form.target_variable.data
+        session['model_type'] = form.model_type.data
 
         print('file_path:', session['file_path'])
         print('target_variable:', session['target_variable'])
         print('sensitive_attribute:', session['sensitive_attribute'])
+        print('fairness_definition:', session['fairness_definition'])
+        print('model_type:', session['model_type'])
 
         # Start the Celery task and save the task ID to the session
         #task = celery.send_task('app.main.views.train_model', args=[session['file_path'], session['target_variable'], session['sensitive_attribute']])
-        task = train_model.delay(session['file_path'], session['target_variable'], session['sensitive_attribute'])
+        task = run_training.delay(session['file_path'], session['target_variable'], session['sensitive_attribute'], session['model_type'], session['fairness_definition'])
         #task = add.delay(4, 6)
         session['task_id'] = str(task.id)
         time.sleep(80)
