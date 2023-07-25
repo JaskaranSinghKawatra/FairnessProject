@@ -1,5 +1,7 @@
 from datetime import datetime
 from flask import render_template, redirect, url_for, session
+
+
 from .forms import HomePageForm, ScenarioSelectionForm, Scenario1Form, Scenario1Form2, Scenario2Form
 from . import main
 import pandas as pd
@@ -14,6 +16,8 @@ from app import celery
 from sklearn.metrics import roc_auc_score
 from app.main.tasks import run_training
 import time
+from flask import flash
+from itertools import product
 
 
 
@@ -23,6 +27,12 @@ ALLOWED_EXTENSIONS = set(['csv'])
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def generate_hyperparameters():
+    learning_rate_values = [0.01, 0.1, 1]
+    lambda_fairness_values = [0.1, 1, 10]
+    for learning_rate, lambda_fairness in product(learning_rate_values, lambda_fairness_values):
+        yield {'learning_rate': learning_rate, 'lambda_fairness': lambda_fairness}
 
 
 @main.route('/', methods=['GET', 'POST'])
@@ -67,26 +77,37 @@ def scenario_selection():
 def scenario_1():
     form = Scenario1Form()
     form.sensitive_attribute.choices = session.get('column_headers', [])
-    form.target_variable.choices = [header for header in session.get('column_headers', []) if header != session.get('sensitive_attribute')]
+    form.target_variable.choices = session.get('column_headers', [])
     if form.validate_on_submit():
-        session['sensitive_attribute'] = form.sensitive_attribute.data
-        session['target_variable'] = form.target_variable.data
-        session['model_type'] = form.model_type.data
+        if form.sensitive_attribute.data != form.target_variable.data:
+            session['sensitive_attribute'] = form.sensitive_attribute.data
+            session['target_variable'] = form.target_variable.data
+            session['model_type'] = form.model_type.data
+            task_ids = []
+            for params in generate_hyperparameters():
+                task = run_training.delay(session['file_path'], session['target_variable'], session['sensitive_attribute'], session['model_type'], session['fairness_definition'], params['learning_rate'], params['lambda_fairness'])
+                task_ids.append(str(task.id))
+            session['task_id'] = task_ids
+            # session['task_id'] = str(task.id)
+            time.sleep(600)
+            return redirect(url_for('main.results'))
+        else:
+            flash('The sensitive attribute and target variable cannot be the same.')
 
-        print('file_path:', session['file_path'])
-        print('target_variable:', session['target_variable'])
-        print('sensitive_attribute:', session['sensitive_attribute'])
-        print('fairness_definition:', session['fairness_definition'])
-        print('model_type:', session['model_type'])
+    return render_template('scenario_1.html', form=form)
+        
+
+        # print('file_path:', session['file_path'])
+        # print('target_variable:', session['target_variable'])
+        # print('sensitive_attribute:', session['sensitive_attribute'])
+        # print('fairness_definition:', session['fairness_definition'])
+        # print('model_type:', session['model_type'])
 
         # Start the Celery task and save the task ID to the session
         #task = celery.send_task('app.main.views.train_model', args=[session['file_path'], session['target_variable'], session['sensitive_attribute']])
-        task = run_training.delay(session['file_path'], session['target_variable'], session['sensitive_attribute'], session['model_type'], session['fairness_definition'])
         #task = add.delay(4, 6)
-        session['task_id'] = str(task.id)
-        time.sleep(80)
-        return redirect(url_for('main.results'))
-    return render_template('scenario_1.html', form=form)
+        
+    
 
 @main.route('/scenario_1_2', methods=['GET', 'POST'])
 def scenario_1_2():

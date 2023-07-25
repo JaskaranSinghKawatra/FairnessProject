@@ -6,15 +6,41 @@ from app import celery
 import tensorflow as tf
 import numpy as np
 import time
-from app.main.training_models import TrainingModels
+from app.FairModels.training_models import TrainingModels
+import multiprocessing as mp
+from itertools import product
+from multiprocessing import Pool
+
+# @celery.task(bind=True)
+# def run_training(self, file_path, target_variable, sensitive_attribute, model_type, fairness_definition):
+#     trainer =  TrainingModels(file_path, target_variable, sensitive_attribute)
+#     return trainer.train_model(model_type, fairness_definition)
 
 @celery.task(bind=True)
-def run_training(self, file_path, target_variable, sensitive_attribute, model_type, fairness_definition):
+def run_training(self, file_path, target_variable, sensitive_attribute, model_type, fairness_definition, learning_rate, lambda_fairness):
     trainer =  TrainingModels(file_path, target_variable, sensitive_attribute)
+    trainer.set_hyperparameters(learning_rate, lambda_fairness)
     return trainer.train_model(model_type, fairness_definition)
 
 
+# def multiple_models(self, file_path, target_variable, sensitive_attribute, model_type, fairness_definition):
+#     learning_rate_grid = [0.01, 0.1, 1]
+#     lambda_fairness_grid = [0.1, 1, 10]
+#     hyperparameters = list(product(learning_rate_grid, lambda_fairness_grid))
 
+#     args_list = [(file_path, target_variable, sensitive_attribute, model_type, fairness_definition, lr, lf) for lr, lf in hyperparameters]
+#     with Pool() as pool:
+#         results = pool.map(run_training, args_list)
+#     results_df = pd.DataFrame(results)
+#     print(results_df)
+#     return results_df
+
+
+
+
+#     # Create a multiprocessing pool and map the function to the hyperparameter
+#     with mp.Pool(mp.cpu_count()) as pool:
+#         results = pool.starmap(train_model, args_list)
 # def train_model(self, file_path, target_variable, sensitive_attribute, model_type, fairness_definition):
 #     print("Train model task is being executed.")
 #     start_time = time.time()
