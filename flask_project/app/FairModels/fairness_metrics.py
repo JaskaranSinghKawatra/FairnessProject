@@ -40,3 +40,11 @@ def calculate_confusion_matrix_multigroup(y_true, y_pred, A_one_hot):
         cm_A = confusion_matrix(y_true[A == a], y_pred[A == a] > 0.5)
         confusion_matrices[a] = cm_A
     return confusion_matrices
+
+def convert_keys_to_int(d):
+    if isinstance(d, dict):
+        return {int(k) if isinstance(k, np.int64) else k: convert_keys_to_int(v) for k, v in d.items()}
+    elif isinstance(d, list):
+        return [convert_keys_to_int(v) for v in d]
+    else:
+        return d

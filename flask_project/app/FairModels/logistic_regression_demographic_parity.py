@@ -4,9 +4,12 @@ import numpy as np
 from sklearn.metrics import roc_auc_score
 from .preprocessing import preprocess_data
 import scipy
-from .fairness_metrics import calculate_predictive_rates_multigroup, calculate_fairness_metrics_multigroup, calculate_confusion_matrix_multigroup
+from .fairness_metrics import calculate_predictive_rates_multigroup, calculate_fairness_metrics_multigroup, calculate_confusion_matrix_multigroup, convert_keys_to_int
+from app.main.models import ModelResults, FairnessMetrics
+from app import db
+import uuid
 
-def logistic_regression_demographic_parity(df, target_variable, sensitive_attribute, learning_rate, lambda_fairness):
+def logistic_regression_demographic_parity(df, target_variable, sensitive_attribute, learning_rate, lambda_fairness, num_epochs, batch_size):
 
     X_train, y_train, A_train, X_test, y_test, A_test = preprocess_data(df, target_variable, sensitive_attribute)
 
@@ -29,25 +32,50 @@ def logistic_regression_demographic_parity(df, target_variable, sensitive_attrib
     # Initialize the weights and bias
     w = tf.Variable(tf.random.normal([X_train.shape[1], 1], dtype = tf.float32))
     b = tf.Variable(tf.zeros([1], dtype = tf.float32))
-
+    if np.isnan(w.numpy()).any() or np.isnan(b.numpy()).any():
+        print("NaN value encountered in initial weights")
+        import pdb; pdb.set_trace()
     # Define the logistic regression model
     def model(X):
         X = tf.cast(X, tf.float32)
         return tf.keras.activations.sigmoid(tf.matmul(X, w) + b)
 
     # Define the fairness penalty
+
     def fairness_penalty(A_one_hot, predictions):
         A_one_hot = tf.cast(A_one_hot, tf.float32)
         predictions = tf.cast(predictions, tf.float32)
         group_predictions = tf.matmul(tf.transpose(A_one_hot), predictions)
         group_counts = tf.reduce_sum(A_one_hot, axis=0)
+
+        # Debug: Check if group_counts contains zero
+        if tf.reduce_any(tf.equal(group_counts, 0)):
+            print("Zero value encountered in group_counts")
+            import pdb; pdb.set_trace()
+
         group_averages = group_predictions / group_counts[:, tf.newaxis]
-        # Check for NaNs
-        # tf.debugging.check_numerics(group_predictions, message='Debugging: NaN found in group_predictions')
-        # tf.debugging.check_numerics(group_counts, message='Debugging: NaN found in group_counts')
-        # tf.debugging.check_numerics(group_averages, message='Debugging: NaN found in group_averages')
+        if tf.reduce_any(tf.math.is_nan(group_averages)):
+            print("NaN value encountered in group_averages")
+            import pdb; pdb.set_trace()
+
         max_diff = tf.reduce_max(group_averages) - tf.reduce_min(group_averages)
+        if tf.reduce_any(tf.math.is_nan(max_diff)):
+            print("NaN value encountered in max_diff")
+            import pdb; pdb.set_trace()
+
         return max_diff
+    # def fairness_penalty(A_one_hot, predictions):
+    #     A_one_hot = tf.cast(A_one_hot, tf.float32)
+    #     predictions = tf.cast(predictions, tf.float32)
+    #     group_predictions = tf.matmul(tf.transpose(A_one_hot), predictions)
+    #     group_counts = tf.reduce_sum(A_one_hot, axis=0)
+    #     group_averages = group_predictions / group_counts[:, tf.newaxis]
+    #     # Check for NaNs
+    #     # tf.debugging.check_numerics(group_predictions, message='Debugging: NaN found in group_predictions')
+    #     # tf.debugging.check_numerics(group_counts, message='Debugging: NaN found in group_counts')
+    #     # tf.debugging.check_numerics(group_averages, message='Debugging: NaN found in group_averages')
+    #     max_diff = tf.reduce_max(group_averages) - tf.reduce_min(group_averages)
+    #     return max_diff
 
         # group_0_mask = tf.equal(A, 0)
         # group_1_mask = tf.equal(A, 1)
@@ -56,78 +84,139 @@ def logistic_regression_demographic_parity(df, target_variable, sensitive_attrib
         # return tf.abs(tf.reduce_mean(predictions_0) - tf.reduce_mean(predictions_1))
 
     # Define the custom loss function
+
     def loss_fn(y_true, y_pred, A_one_hot):
         y_true = tf.cast(y_true, tf.float32)
         y_pred = tf.cast(y_pred, tf.float32)
         A_one_hot = tf.cast(A_one_hot, tf.float32)
-        # lambda_fairness = tf.cast(lambda_fairness, tf.float32)
         epsilon = 1e-7
-        log_loss = -tf.reduce_mean(y_true * tf.math.log(y_pred + epsilon) + (1 - y_true) * tf.math.log(1 - y_pred + epsilon))
 
-        # Check for NaNs
-        #tf.debugging.check_numerics(log_loss, message='Debugging: NaN found in log_loss')
+        log_y_pred = tf.math.log(y_pred + epsilon)
+        if tf.reduce_any(tf.math.is_nan(log_y_pred)):
+            print("NaN value encountered in log_y_pred")
+            import pdb; pdb.set_trace()
+
+        log_1_minus_y_pred = tf.math.log(1 - y_pred + epsilon)
+        if tf.reduce_any(tf.math.is_nan(log_1_minus_y_pred)):
+            print("NaN value encountered in log_1_minus_y_pred")
+            import pdb; pdb.set_trace()
+
+        log_loss = -tf.reduce_mean(y_true * log_y_pred + (1 - y_true) * log_1_minus_y_pred)
+        if tf.reduce_any(tf.math.is_nan(log_loss)):
+            print("NaN value encountered in log_loss")
+            import pdb; pdb.set_trace()
+
         fairness_loss = fairness_penalty(A_one_hot, y_pred)
-        # Check for NaNs
-        #tf.debugging.check_numerics(fairness_loss, message='Debugging: NaN found in fairness_loss')
-        return log_loss + lambda_fairness * fairness_loss
+        if tf.reduce_any(tf.math.is_nan(fairness_loss)):
+            print("NaN value encountered in fairness_loss")
+            import pdb; pdb.set_trace()
+
+        total_loss = log_loss + lambda_fairness * fairness_loss
+        if tf.reduce_any(tf.math.is_nan(total_loss)):
+            print("NaN value encountered in total_loss")
+            import pdb; pdb.set_trace()
+
+        return total_loss
+    # def loss_fn(y_true, y_pred, A_one_hot):
+    #     y_true = tf.cast(y_true, tf.float32)
+    #     y_pred = tf.cast(y_pred, tf.float32)
+    #     A_one_hot = tf.cast(A_one_hot, tf.float32)
+    #     # lambda_fairness = tf.cast(lambda_fairness, tf.float32)
+    #     epsilon = 1e-7
+    #     log_loss = -tf.reduce_mean(y_true * tf.math.log(y_pred + epsilon) + (1 - y_true) * tf.math.log(1 - y_pred + epsilon))
+
+    #     # Check for NaNs
+    #     #tf.debugging.check_numerics(log_loss, message='Debugging: NaN found in log_loss')
+    #     fairness_loss = fairness_penalty(A_one_hot, y_pred)
+    #     # Check for NaNs
+    #     #tf.debugging.check_numerics(fairness_loss, message='Debugging: NaN found in fairness_loss')
+    #     return log_loss + lambda_fairness * fairness_loss
 
     # Define the optimizer
-    optimizer = tf.optimizers.Adam(learning_rate)
+    optimizer = tf.optimizers.Adam(learning_rate=learning_rate)
 
     # Create a tf.data.Dataset object
     train_data = tf.data.Dataset.from_tensor_slices((X_train, y_train, A_train))
 
     # Shuffle and batch the data
-    batch_size = 32
+    # batch_size = 32
     train_data = train_data.shuffle(buffer_size=1024).batch(batch_size)
 
     # Initialize lists to store the values for each iteration
     loss_values = []
     fairness_values = []
     accuracy_values = []
+    model_id = str(uuid.uuid4())
 
     with tf.device('/GPU:0'):
 
     # Train the model
-        for _ in range(100):  # number of training iterations
+        for epoch in range(num_epochs):  # number of training iterations
             predictions_list = []
             for batch_x, batch_y, batch_a in train_data:
                 with tf.GradientTape() as tape:
-                    # X_train_tf = tf.cast(X_train, tf.float64)
                     predictions = model(batch_x)
+                    if np.isnan(predictions.numpy()).any():
+                        print("NaN value encountered in predictions")
+                        import pdb; pdb.set_trace()
                     predictions_list.append(predictions)
+                    loss = loss_fn(batch_y, predictions, batch_a)
+                    if np.isnan(loss.numpy()).any():
+                        print("NaN value encountered in loss")
+                        import pdb; pdb.set_trace()
 
-                    # print(f"Min prediction: {tf.reduce_min(predictions).numpy()}, Max prediction: {tf.reduce_max(predictions).numpy()}")
+                grads = tape.gradient(loss, [w, b])
+                if np.isnan(grads[0].numpy()).any() or np.isnan(grads[1].numpy()).any():
+                    print("NaN value encountered in gradients")
+                    import pdb; pdb.set_trace()
 
+                optimizer.apply_gradients(zip(grads, [w, b]))
+                if np.isnan(w.numpy()).any() or np.isnan(b.numpy()).any():
+                    print("NaN value encountered in weights")
+                    import pdb; pdb.set_trace()
+ 
+            # Calculate the fairness and accuracy for this iteration
+            current_accuracy = np.mean((predictions.numpy() > 0.5) == batch_y)
+            current_fairness = fairness_penalty(batch_a, predictions).numpy()
 
-                    # predictions = model(X_train)
-                    loss = loss_fn(batch_y, predictions, batch_a)  # adjust lambda_fairness as needed
+            # After the end of each epoch, concatenate the predictions for all batches
+            epoch_predictions = tf.concat(predictions_list, axis=0)
 
-                    
+            # At the end of each epoch, calculate the predictive rates and fairness metrics
+            group_predictive_rates = calculate_predictive_rates_multigroup(y_train, epoch_predictions, A_train)
+            # demographic_parity_difference, demographic_parity_ratio = calculate_fairness_metrics_multigroup(y_train, epoch_predictions, A_train)
 
-                    # Check for NaNs in predictions and loss
-                    # tf.debugging.check_numerics(predictions, message='Debugging: NaN found in predictions')
-                    # tf.debugging.check_numerics(loss, message='Debugging: NaN found in loss')
+            fairness_metrics_dict = calculate_fairness_metrics_multigroup(y_train, epoch_predictions, A_train)
+            for group, predictive_rate in group_predictive_rates.items():
+                group_metrics = fairness_metrics_dict[int(group)]
 
-            grads = tape.gradient(loss, [w, b])
-            optimizer.apply_gradients(zip(grads, [w, b]))
+                # Create a dictionary of fairness metrics for the current group and epoch
+                metrics = {
+                            'predictive_rate': predictive_rate,
+                            'demographic_parity_difference': group_metrics[0],
+                            'demographic_parity_ratio': group_metrics[1]
+                        }
+                
+                metrics = convert_keys_to_int(metrics)
+                
+                # Create a FairnessMetrics instance and add it to the session
+                fairness_metrics = FairnessMetrics(
+                                                    id=str(uuid.uuid4()),
+                                                    model_results_id=model_id,
+                                                    fairness_notion='Demographic Parity',
+                                                    group=group,
+                                                    epoch=epoch,
+                                                    metrics=metrics
+                )
+                db.session.add(fairness_metrics)
+            db.session.commit()
 
-        # Calculate the fairness and accuracy for this iteration
-        current_accuracy = np.mean((predictions.numpy() > 0.5) == batch_y)
-        current_fairness = fairness_penalty(batch_a, predictions).numpy()
-
-        # After the end of each epoch, concatenate the predictions for all batches
-        epoch_predictions = tf.concat(predictions_list, axis=0)
-
-        # At the end of each epoch, calculate the predictive rates and fairness metrics
-        group_predictive_rates = calculate_predictive_rates_multigroup(y_train, epoch_predictions, A_train)
-        demographic_parity_difference, demographic_parity_ratio = calculate_fairness_metrics_multigroup(y_train, epoch_predictions, A_train)
-        predictions_list.clear()
-        
-        # Append the loss, accuracy, and fairness values for this epoch
-        loss_values.append(loss.numpy())
-        accuracy_values.append(current_accuracy)
-        fairness_values.append(current_fairness)
+            predictions_list.clear()
+            
+            # Append the loss, accuracy, and fairness values for this epoch
+            loss_values.append(loss.numpy())
+            accuracy_values.append(current_accuracy)
+            fairness_values.append(current_fairness)
 
     # Make predictions
     predictions_test = model(X_test)
@@ -135,14 +224,33 @@ def logistic_regression_demographic_parity(df, target_variable, sensitive_attrib
     # Calculate the accuracy of the model
     model_accuracy = np.mean((predictions_test.numpy() > 0.5) == y_test)
 
+    print("Test Predictions NaN: ",np.isnan(predictions_test.numpy()).any())
+    print("Test Values NaN",np.isnan(y_test).any())
+
     # Calculate the AUC score
     auc_score = roc_auc_score(y_test, predictions_test.numpy())
 
     # Calculate the fairness metric (demographic parity)
-    fairness_metric = fairness_penalty(A_test, predictions_test).numpy()
+    fairness_score = fairness_penalty(A_test, predictions_test).numpy()
+    
+    # Store the results in a model database
 
+    model_results = ModelResults(id=model_id, 
+                                 model_class='Logistic Regression', 
+                                 fairness_notion='Demographic Parity', 
+                                 learning_rate=learning_rate, 
+                                 lambda_fairness=lambda_fairness, 
+                                 batch_size=batch_size, 
+                                 num_epochs=num_epochs, 
+                                 loss_values=loss_values, 
+                                 accuracy_values=accuracy_values, 
+                                 model_accuracy=model_accuracy, 
+                                 auc_score=auc_score,
+                                 fairness_score=fairness_score)
+    
+    db.session.add(model_results)
+    db.session.commit()
     # end_time = time.time()  # End measuring execution time
     # execution_time = end_time - start_time
     # print("Execution time: {:.2f} seconds".format(execution_time))
 
-    return predictions_test.numpy().tolist(), model_accuracy, auc_score

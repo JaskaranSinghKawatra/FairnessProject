@@ -7,6 +7,8 @@ def make_celery(app):
         broker=app.config['CELERY_BROKER_URL']
     )
     celery.conf.update(app.config)
+    celery.conf['BROKER_TRANSPORT_OPTIONS'] = {'visibility_timeout': 3600, 'socket_timeout': 3600} # 1 hour
+    celery.conf['RESULT_BACKEND_TRANSPORT_OPTIONS'] = {'socket_timeout': 3600}
 
     class ContextTask(celery.Task):
         def __call__(self, *args, **kwargs):

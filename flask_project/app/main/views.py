@@ -18,6 +18,15 @@ from app.main.tasks import run_training
 import time
 from flask import flash
 from itertools import product
+from flask_socketio import emit
+from celery.result import AsyncResult
+from flask import jsonify
+from app.main.models import ModelResults
+import plotly
+import plotly.graph_objs as go
+from app import socketio
+
+
 
 
 
@@ -31,8 +40,16 @@ def allowed_file(filename):
 def generate_hyperparameters():
     learning_rate_values = [0.01, 0.1, 1]
     lambda_fairness_values = [0.1, 1, 10]
+    num_epochs = 100
+    batch_size = 32
+
     for learning_rate, lambda_fairness in product(learning_rate_values, lambda_fairness_values):
-        yield {'learning_rate': learning_rate, 'lambda_fairness': lambda_fairness}
+        yield {
+            'learning_rate': learning_rate,
+            'lambda_fairness': lambda_fairness,
+            'num_epochs': num_epochs,
+            'batch_size': batch_size
+        }
 
 
 @main.route('/', methods=['GET', 'POST'])
@@ -85,12 +102,20 @@ def scenario_1():
             session['model_type'] = form.model_type.data
             task_ids = []
             for params in generate_hyperparameters():
-                task = run_training.delay(session['file_path'], session['target_variable'], session['sensitive_attribute'], session['model_type'], session['fairness_definition'], params['learning_rate'], params['lambda_fairness'])
+                task = run_training.delay(session['file_path'], 
+                                          session['target_variable'], 
+                                          session['sensitive_attribute'], 
+                                          session['model_type'], 
+                                          session['fairness_definition'], 
+                                          params['learning_rate'], 
+                                          params['lambda_fairness'],
+                                          params['num_epochs'],
+                                          params['batch_size'])
                 task_ids.append(str(task.id))
-            session['task_id'] = task_ids
-            # session['task_id'] = str(task.id)
-            time.sleep(600)
-            return redirect(url_for('main.results'))
+            session['task_ids'] = task_ids
+            socketio.emit('wait_for_tasks', session['task_ids'], namespace='/')
+            return render_template('waiting.html', form=form)
+
         else:
             flash('The sensitive attribute and target variable cannot be the same.')
 
@@ -136,4 +161,34 @@ def results():
         traceback = task.traceback if task else None
         # If task is still processing or failed, display a waiting or error page
         return render_template('waiting_or_error.html', task=task, traceback=traceback)
+    
+
+@main.route('/results/<model_type>', methods=['GET'])
+def show_model_results(model_type):
+    # Query the database for the model results
+    results = ModelResults.query.filter_by(model_class=model_type).all()
+    ## Noticed an issue here: Model class is Logistic Regression but model type is logistic_regression_demographic_parity
+
+    # Prepare the data for the scatter plot
+    model_accuracies, fairness_scores = zip(*[(result.model_accuracy, result.fairness_score) for result in results])
+
+    # Create the scatter plot
+    scatter = go.Scatter(x = model_accuracies, y = fairness_scores, mode = 'markers')
+    layout = go.Layout(title = 'Model Accuracy vs Fairness Score', xaxis = dict(title = 'Model Accuracy'), yaxis = dict(title = 'Fairness Score'))
+    figure = go.Figure(data = [scatter], layout = layout)
+
+    # Convert the plot to HTML
+    plot_html = plotly.offline.plot(figure, include_plotlyjs = False, output_type = 'div')
+
+    return render_template('results.html', plot = plot_html)
+
+
+
+# Route to check the status of the tasks
+
+@main.route('/check_tasks', methods=['POST'])
+def check_tasks():
+    task_ids = request.json['task_ids']
+    tasks_finished = all(AsyncResult(task_id).ready() for task_id in task_ids)
+    return jsonify(tasks_finished=tasks_finished)
 

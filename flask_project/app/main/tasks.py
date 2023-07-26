@@ -17,9 +17,17 @@ from multiprocessing import Pool
 #     return trainer.train_model(model_type, fairness_definition)
 
 @celery.task(bind=True)
-def run_training(self, file_path, target_variable, sensitive_attribute, model_type, fairness_definition, learning_rate, lambda_fairness):
+def run_training(self, file_path, 
+                 target_variable, 
+                 sensitive_attribute, 
+                 model_type, 
+                 fairness_definition, 
+                 learning_rate, 
+                 lambda_fairness, 
+                 num_epochs, 
+                 batch_size):
     trainer =  TrainingModels(file_path, target_variable, sensitive_attribute)
-    trainer.set_hyperparameters(learning_rate, lambda_fairness)
+    trainer.set_hyperparameters(learning_rate, lambda_fairness, num_epochs, batch_size)
     return trainer.train_model(model_type, fairness_definition)
 
 
