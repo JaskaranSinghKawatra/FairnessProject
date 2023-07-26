@@ -39,18 +39,20 @@ class TrainingModels:
         self.target_variable = target_variable
         self.sensitive_attribute = sensitive_attribute
         
-    def set_hyperparameters(self, learning_rate, lambda_fairness):
+    def set_hyperparameters(self, learning_rate, lambda_fairness, num_epochs, batch_size):
         self.learning_rate = learning_rate
         self.lambda_fairness = lambda_fairness
+        self.num_epochs = num_epochs
+        self.batch_size = batch_size
 
     def get_hyperparameters(self):
-        return self.learning_rate, self.lambda_fairness
+        return self.learning_rate, self.lambda_fairness, self.num_epochs, self.batch_size
 
     def train_model(self, model_type, fairness_definition):
 
         if model_type == 'logistic_regression':
             if fairness_definition == 'demographic_parity':
-                return logistic_regression_demographic_parity(self.df_path, self.target_variable, self.sensitive_attribute, self.learning_rate, self.lambda_fairness)
+                return logistic_regression_demographic_parity(self.df_path, self.target_variable, self.sensitive_attribute, self.learning_rate, self.lambda_fairness, self.num_epochs, self.batch_size)
             # elif fairness_definition == 'group_unawareness':
             #     return self.logistic_regression_group_unawareness()
             # elif fairness_definition == 'disparate_impact':
