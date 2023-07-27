@@ -203,7 +203,7 @@ def logistic_regression_demographic_parity(df, target_variable, sensitive_attrib
                 fairness_metrics = FairnessMetrics(
                                                     id=str(uuid.uuid4()),
                                                     model_results_id=model_id,
-                                                    fairness_notion='Demographic Parity',
+                                                    fairness_notion='demographic_parity',
                                                     group=group,
                                                     epoch=epoch,
                                                     metrics=metrics
@@ -236,8 +236,8 @@ def logistic_regression_demographic_parity(df, target_variable, sensitive_attrib
     # Store the results in a model database
 
     model_results = ModelResults(id=model_id, 
-                                 model_class='Logistic Regression', 
-                                 fairness_notion='Demographic Parity', 
+                                 model_class='logistic_regression', 
+                                 fairness_notion='demographic_parity', 
                                  learning_rate=learning_rate, 
                                  lambda_fairness=lambda_fairness, 
                                  batch_size=batch_size, 

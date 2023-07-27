@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Please wait while the models are being trained...</h1>
+
+    <script>
+    var task_ids = '{{ session["task_ids"] | join(",") }}'.split(',');
+
+    // Function to check if tasks are finished
+    function checkTasks() {
+        fetch('{{ url_for("main.check_tasks") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({task_ids: task_ids}),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.tasks_finished) {
+                // If tasks are finished, redirect to the returned URL
+                window.location.href = data.redirect_url;
+            }
+            else {
+                // If tasks are not finished, check again after 5 seconds
+                setTimeout(checkTasks, 5000);
+            }
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+        });
+    }
+
+    // Start checking tasks
+    checkTasks();
+    </script>
+{% endblock %}

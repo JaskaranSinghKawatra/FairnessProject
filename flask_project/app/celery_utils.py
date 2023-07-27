@@ -1,4 +1,7 @@
 from celery import Celery
+from gevent import Timeout
+from app.redis_utils import Redis
+
 
 def make_celery(app):
     celery = Celery(
@@ -11,9 +14,12 @@ def make_celery(app):
     celery.conf['RESULT_BACKEND_TRANSPORT_OPTIONS'] = {'socket_timeout': 3600}
 
     class ContextTask(celery.Task):
+        timeout = 3600
+
         def __call__(self, *args, **kwargs):
             with app.app_context():
-                return self.run(*args, **kwargs)
+                with Timeout(self.timeout, TimeoutError(f"Task {self.name} timed out")):
+                    return self.run(*args, **kwargs)
 
     celery.Task = ContextTask
     return celery
