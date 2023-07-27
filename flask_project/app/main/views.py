@@ -24,7 +24,7 @@ from flask import jsonify
 from app.main.models import ModelResults
 import plotly
 import plotly.graph_objs as go
-from app import socketio
+# from app import socketio
 
 
 
@@ -101,36 +101,68 @@ def scenario_1():
             session['target_variable'] = form.target_variable.data
             session['model_type'] = form.model_type.data
             task_ids = []
-            for params in generate_hyperparameters():
-                task = run_training.delay(session['file_path'], 
+            task = run_training.delay(session['file_path'], 
                                           session['target_variable'], 
                                           session['sensitive_attribute'], 
                                           session['model_type'], 
                                           session['fairness_definition'], 
-                                          params['learning_rate'], 
-                                          params['lambda_fairness'],
-                                          params['num_epochs'],
-                                          params['batch_size'])
-                task_ids.append(str(task.id))
+                                          0.01,
+                                            0.1,
+                                            100,
+                                            32)
+            task_ids.append(str(task.id))
             session['task_ids'] = task_ids
-            socketio.emit('wait_for_tasks', session['task_ids'], namespace='/')
-            return render_template('waiting.html', form=form)
+            return render_template('waiting.html', task_ids=session['task_ids'], form=form)
 
         else:
             flash('The sensitive attribute and target variable cannot be the same.')
 
     return render_template('scenario_1.html', form=form)
+
+# def scenario_1():
+#     form = Scenario1Form()
+#     form.sensitive_attribute.choices = session.get('column_headers', [])
+#     form.target_variable.choices = session.get('column_headers', [])
+#     if form.validate_on_submit():
+#         if form.sensitive_attribute.data != form.target_variable.data:
+#             session['sensitive_attribute'] = form.sensitive_attribute.data
+#             session['target_variable'] = form.target_variable.data
+#             session['model_type'] = form.model_type.data
+#             task_ids = []
+#             # for params in generate_hyperparameters():
+#             task = run_training.delay(session['file_path'], 
+#                                           session['target_variable'], 
+#                                           session['sensitive_attribute'], 
+#                                           session['model_type'], 
+#                                           session['fairness_definition'], 
+#                                           0.01,
+#                                             0.1,
+#                                             100,
+#                                             32)
+#                                         #   params['learning_rate'], 
+#                                         #   params['lambda_fairness'],
+#                                         #   params['num_epochs'],
+#                                         #   params['batch_size'])
+#             task_ids.append(str(task.id))
+#             session['task_ids'] = task_ids
+#             socketio.emit('wait_for_tasks', session['task_ids'], namespace='/')
+#             return render_template('waiting.html', form=form)
+
+#         else:
+#             flash('The sensitive attribute and target variable cannot be the same.')
+
+#     return render_template('scenario_1.html', form=form)
         
 
-        # print('file_path:', session['file_path'])
-        # print('target_variable:', session['target_variable'])
-        # print('sensitive_attribute:', session['sensitive_attribute'])
-        # print('fairness_definition:', session['fairness_definition'])
-        # print('model_type:', session['model_type'])
+#         # print('file_path:', session['file_path'])
+#         # print('target_variable:', session['target_variable'])
+#         # print('sensitive_attribute:', session['sensitive_attribute'])
+#         # print('fairness_definition:', session['fairness_definition'])
+#         # print('model_type:', session['model_type'])
 
-        # Start the Celery task and save the task ID to the session
-        #task = celery.send_task('app.main.views.train_model', args=[session['file_path'], session['target_variable'], session['sensitive_attribute']])
-        #task = add.delay(4, 6)
+#         # Start the Celery task and save the task ID to the session
+#         #task = celery.send_task('app.main.views.train_model', args=[session['file_path'], session['target_variable'], session['sensitive_attribute']])
+#         #task = add.delay(4, 6)
         
     
 
@@ -168,7 +200,9 @@ def show_model_results(model_type):
     # Query the database for the model results
     results = ModelResults.query.filter_by(model_class=model_type).all()
     ## Noticed an issue here: Model class is Logistic Regression but model type is logistic_regression_demographic_parity
-
+    print("Results Object:", results)
+    print("Model Accuracy:", results[0].model_accuracy)
+    print("Fairness Score:", results[0].fairness_score)
     # Prepare the data for the scatter plot
     model_accuracies, fairness_scores = zip(*[(result.model_accuracy, result.fairness_score) for result in results])
 
@@ -186,9 +220,19 @@ def show_model_results(model_type):
 
 # Route to check the status of the tasks
 
+
 @main.route('/check_tasks', methods=['POST'])
 def check_tasks():
     task_ids = request.json['task_ids']
-    tasks_finished = all(AsyncResult(task_id).ready() for task_id in task_ids)
-    return jsonify(tasks_finished=tasks_finished)
+    tasks_finished = all(celery.AsyncResult(task_id).ready() for task_id in task_ids)
+    if tasks_finished:
+        model_type = session['model_type']
+        print("Model Type:", model_type)
+        redirect_url = url_for('main.show_model_results', model_type=model_type)
+    else:
+        redirect_url = None
+    return jsonify(tasks_finished=tasks_finished, redirect_url=redirect_url)
+
+
+
 
