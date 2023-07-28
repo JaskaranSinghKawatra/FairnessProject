@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Model Metrics</title>
+</head>
+<body>
+    <h1>Model Metrics for ID: {{ metrics.id }}</h1>
+    <table>
+        <tr>
+            <th>Metric</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Fairness Notion</td>
+            <td>{{ metrics.fairness_notion }}</td>
+        </tr>
+        <tr>
+            <td>Group</td>
+            <td>{{ metrics.group }}</td>
+        </tr>
+        <tr>
+            <td>Epoch</td>
+            <td>{{ metrics.epoch }}</td>
+        </tr>
+        <tr>
+            <td>Metrics</td>
+            <td>{{ metrics.metrics }}</td>
+        </tr>
+    </table>
+</body>
+</html>

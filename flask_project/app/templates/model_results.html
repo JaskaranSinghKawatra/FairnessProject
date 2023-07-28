@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Model Results</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>Model Results</h1>
+    <div id="plot">{{ plot|safe }}</div>
+
+    <!-- Include the JavaScript that responds to click events -->
+    <script>
+        function bindPlotlyClick() {
+            var plotDiv = document.getElementById('plot');
+            var plotlyPlot = plotDiv.getElementsByClassName('js-plotly-plot')[0];
+            plotlyPlot.on('plotly_click', function(data){
+                var modelId = data.points[0].customdata[0];
+                // print('modelId: ' + modelId);
+                window.location.href = "/model_metrics/" + modelId;
+            });
+        }
+        window.onload = bindPlotlyClick;
+    </script>
+</body>
+</html>

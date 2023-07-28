@@ -1,4 +1,4 @@
-<!-- {% extends "base.html" %}
+{% extends "base.html" %}
 {% block content %}
   <h1>Results</h1>
   <ul>
@@ -8,16 +8,4 @@
     <li>{{ model_accuracy }}</li>
     <li>{{ auc_score }}</li>
   </ul>
-{% endblock %} -->
-
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Model Results</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-</head>
-<body>
-    <h1>Model Results</h1>
-    <div>{{ plot|safe }}</div>
-</body>
-</html>
+{% endblock %}

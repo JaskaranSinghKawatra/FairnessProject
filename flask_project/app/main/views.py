@@ -21,9 +21,12 @@ from itertools import product
 from flask_socketio import emit
 from celery.result import AsyncResult
 from flask import jsonify
-from app.main.models import ModelResults
+from app.main.models import ModelResults, FairnessMetrics 
 import plotly
 import plotly.graph_objs as go
+from plotly.express import scatter
+import plotly.express as px
+import pandas as pd
 # from app import socketio
 
 
@@ -119,50 +122,7 @@ def scenario_1():
 
     return render_template('scenario_1.html', form=form)
 
-# def scenario_1():
-#     form = Scenario1Form()
-#     form.sensitive_attribute.choices = session.get('column_headers', [])
-#     form.target_variable.choices = session.get('column_headers', [])
-#     if form.validate_on_submit():
-#         if form.sensitive_attribute.data != form.target_variable.data:
-#             session['sensitive_attribute'] = form.sensitive_attribute.data
-#             session['target_variable'] = form.target_variable.data
-#             session['model_type'] = form.model_type.data
-#             task_ids = []
-#             # for params in generate_hyperparameters():
-#             task = run_training.delay(session['file_path'], 
-#                                           session['target_variable'], 
-#                                           session['sensitive_attribute'], 
-#                                           session['model_type'], 
-#                                           session['fairness_definition'], 
-#                                           0.01,
-#                                             0.1,
-#                                             100,
-#                                             32)
-#                                         #   params['learning_rate'], 
-#                                         #   params['lambda_fairness'],
-#                                         #   params['num_epochs'],
-#                                         #   params['batch_size'])
-#             task_ids.append(str(task.id))
-#             session['task_ids'] = task_ids
-#             socketio.emit('wait_for_tasks', session['task_ids'], namespace='/')
-#             return render_template('waiting.html', form=form)
 
-#         else:
-#             flash('The sensitive attribute and target variable cannot be the same.')
-
-#     return render_template('scenario_1.html', form=form)
-        
-
-#         # print('file_path:', session['file_path'])
-#         # print('target_variable:', session['target_variable'])
-#         # print('sensitive_attribute:', session['sensitive_attribute'])
-#         # print('fairness_definition:', session['fairness_definition'])
-#         # print('model_type:', session['model_type'])
-
-#         # Start the Celery task and save the task ID to the session
-#         #task = celery.send_task('app.main.views.train_model', args=[session['file_path'], session['target_variable'], session['sensitive_attribute']])
-#         #task = add.delay(4, 6)
         
     
 
@@ -195,26 +155,101 @@ def results():
         return render_template('waiting_or_error.html', task=task, traceback=traceback)
     
 
+# @main.route('/results/<model_type>', methods=['GET'])
+# def show_model_results(model_type):
+#     # Query the database for the model results
+#     results = ModelResults.query.filter_by(model_class=model_type).all()
+#     ## Noticed an issue here: Model class is Logistic Regression but model type is logistic_regression_demographic_parity
+#     print("Results Object:", results)
+#     print("Model Accuracy:", results[0].model_accuracy)
+#     print("Fairness Score:", results[0].fairness_score)
+#     # Prepare the data for the scatter plot
+#     model_accuracies, fairness_scores = zip(*[(result.model_accuracy, result.fairness_score) for result in results])
+
+#     # Create the scatter plot
+#     scatter = go.Scatter(x = model_accuracies, y = fairness_scores, mode = 'markers')
+#     layout = go.Layout(title = 'Model Accuracy vs Fairness Score', xaxis = dict(title = 'Model Accuracy'), yaxis = dict(title = 'Fairness Score'))
+#     figure = go.Figure(data = [scatter], layout = layout)
+
+#     # Convert the plot to HTML
+#     plot_html = plotly.offline.plot(figure, include_plotlyjs = True, output_type = 'div')
+
+#     return render_template('model_results.html', plot = plot_html)
+
+
+
 @main.route('/results/<model_type>', methods=['GET'])
 def show_model_results(model_type):
     # Query the database for the model results
     results = ModelResults.query.filter_by(model_class=model_type).all()
-    ## Noticed an issue here: Model class is Logistic Regression but model type is logistic_regression_demographic_parity
-    print("Results Object:", results)
-    print("Model Accuracy:", results[0].model_accuracy)
-    print("Fairness Score:", results[0].fairness_score)
+
     # Prepare the data for the scatter plot
-    model_accuracies, fairness_scores = zip(*[(result.model_accuracy, result.fairness_score) for result in results])
+    data = [{
+            'model_id': result.id,
+            'model_accuracy': result.model_accuracy, 
+             'fairness_score': result.fairness_score, 
+             'learning_rate': result.learning_rate, 
+             'lambda_fairness': result.lambda_fairness} for result in results]
+    df = pd.DataFrame(data)
+    print("Model ID:", df['model_id'].tolist())
 
     # Create the scatter plot
-    scatter = go.Scatter(x = model_accuracies, y = fairness_scores, mode = 'markers')
-    layout = go.Layout(title = 'Model Accuracy vs Fairness Score', xaxis = dict(title = 'Model Accuracy'), yaxis = dict(title = 'Fairness Score'))
-    figure = go.Figure(data = [scatter], layout = layout)
+    fig = px.scatter(df, x='fairness_score', y='model_accuracy',
+                     size='model_accuracy', hover_data=['learning_rate', 'lambda_fairness'],
+                     custom_data=['model_id'],
+                     labels={'fairness_score': 'Fairness Metric (Lower is Better)',
+                             'model_accuracy': 'Model Accuracy (Higher is Better)',
+                             },
+                     title='Accuracy vs. Fairness with Hover Tooltip')
 
     # Convert the plot to HTML
-    plot_html = plotly.offline.plot(figure, include_plotlyjs = False, output_type = 'div')
+    plot_html = plotly.offline.plot(fig, include_plotlyjs = True, output_type = 'div')
 
-    return render_template('results.html', plot = plot_html)
+    return render_template('model_results.html', plot = plot_html)
+
+
+# @main.route('/results/<model_type>', methods=['GET'])
+# def show_model_results(model_type):
+#     # Query the database for the model results
+#     results = ModelResults.query.filter_by(model_class=model_type).all()
+
+#     # Prepare the data for the scatter plot
+#     data = [{'model_id': result.id, 
+#              'model_accuracy': result.model_accuracy, 
+#              'fairness_score': result.fairness_score, 
+#              'learning_rate': result.learning_rate, 
+#              'lambda_fairness': result.lambda_fairness} for result in results]
+#     df = pd.DataFrame(data)
+
+#     # Create the scatter plot
+#     fig = px.scatter(df, x='fairness_score', y='model_accuracy',
+#                      size='model_accuracy', hover_data=['learning_rate', 'lambda_fairness'],
+#                      labels={'fairness_score': 'Fairness Metric (Lower is Better)',
+#                              'model_accuracy': 'Model Accuracy (Higher is Better)',
+#                              },
+#                      title='Accuracy vs. Fairness with Hover Tooltip')
+    
+    # Add click events to the markers
+    # for trace in fig.data:
+    #     trace['customdata'] = df['model_id']
+    #     trace['hovertemplate'] = '<b>Model ID</b>: %{customdata}<br>' + trace['hovertemplate']
+    #     trace['mode'] = 'markers+text'
+    #     trace['text'] = df['model_id'].tolist()
+    #     trace['textposition'] = 'top center'
+
+    # # Convert the plot to HTML
+    # plot_html = plotly.offline.plot(fig, include_plotlyjs = True, output_type = 'div')
+
+    # return render_template('model_results.html', plot = plot_html)
+
+@main.route('/model_metrics/<model_id>', methods=['GET'])
+def show_model_metrics(model_id):
+    # Fetch the model's fairness metrics from the database
+    model_metrics = FairnessMetrics.query.filter_by(model_results_id=model_id).first_or_404()
+
+    # Render a template that displays the metrics
+    return render_template('model_metrics.html', metrics=model_metrics)
+
 
 
 
