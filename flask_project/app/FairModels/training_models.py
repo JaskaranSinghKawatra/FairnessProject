@@ -8,30 +8,14 @@ from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import LabelEncoder
 from .logistic_regression_demographic_parity import logistic_regression_demographic_parity
-# from FairModels.logistic_regression_disparate_impact import logistic_regression_disparate_impact
-# from FairModels.logistic_regression_equal_opportunity import logistic_regression_equal_opportunity
-# from FairModels.logistic_regression_equal_odds import logistic_regression_equal_odds
-# from FairModels.logistic_regression_group_unawareness import logistic_regression_group_unawareness
-# from FairModels.logistic_regression_negative_predictive_value_parity import logistic_regression_negative_predictive_value_parity
-# from FairModels.logistic_regression_positive_predictive_value_parity import logistic_regression_positive_predictive_value_parity
-# from FairModels.logistic_regression_false_positive_ratio_parity import logistic_regression_false_positive_ratio_parity
-# from FairModels.perceptron_demographic_parity import perceptron_demographic_parity
-# from FairModels.perceptron_disparate_impact import perceptron_disparate_impact
-# from FairModels.perceptron_equal_opportunity import perceptron_equal_opportunity
-# from FairModels.perceptron_equal_odds import perceptron_equal_odds
-# from FairModels.perceptron_group_unawareness import perceptron_group_unawareness
-# from FairModels.perceptron_negative_predictive_value_parity import perceptron_negative_predictive_value_parity
-# from FairModels.perceptron_positive_predictive_value_parity import perceptron_positive_predictive_value_parity
-# from FairModels.perceptron_false_positive_ratio_parity import perceptron_false_positive_ratio_parity
-# from FairModels.neural_network_demographic_parity import neural_network_demographic_parity
-# from FairModels.neural_network_disparate_impact import neural_network_disparate_impact
-# from FairModels.neural_network_equal_opportunity import neural_network_equal_opportunity
-# from FairModels.neural_network_equal_odds import neural_network_equal_odds
-# from FairModels.neural_network_group_unawareness import neural_network_group_unawareness
-# from FairModels.neural_network_negative_predictive_value_parity import neural_network_negative_predictive_value_parity
-# from FairModels.neural_network_positive_predictive_value_parity import neural_network_positive_predictive_value_parity
-# from FairModels.neural_network_false_positive_ratio_parity import neural_network_false_positive_ratio_parity
-
+from .logistic_regression_prejudice_remover import logistic_regression_prejudice_remover
+from .logistic_regression_demographic_parity_reductions import logistic_regression_demographic_parity_reductions
+# from .logistic_regression_equalized_odds_reductions import logistic_regression_equalized_odds_reductions
+from .logistic_regression_equal_opportunity_reductions import logistic_regression_equal_opportunity_reductions
+from .logistic_regression_false_positive_rate_parity_reductions import logistic_regression_false_positive_rate_parity_reductions
+from .logistic_regression_equalized_odds_reductions import logistic_regression_equalized_odds_reductions
+from .logistic_regression_error_rate_parity_reductions import logistic_regression_error_rate_parity_reductions
+# from .neural_network_demographic_parity_reductions import neural_network_demographic_parity_reductions
 
 class TrainingModels:
     def __init__(self, df_path, target_variable, sensitive_attribute):
@@ -52,21 +36,18 @@ class TrainingModels:
 
         if model_type == 'logistic_regression':
             if fairness_definition == 'demographic_parity':
-                return logistic_regression_demographic_parity(self.df_path, self.target_variable, self.sensitive_attribute, self.learning_rate, self.lambda_fairness, self.num_epochs, self.batch_size)
+                return logistic_regression_demographic_parity_reductions(self.df_path, self.target_variable, self.sensitive_attribute, self.learning_rate, self.lambda_fairness, self.num_epochs, self.batch_size)
+                # return logistic_regression_demographic_parity(self.df_path, self.target_variable, self.sensitive_attribute, self.learning_rate, self.lambda_fairness, self.num_epochs, self.batch_size)
             # elif fairness_definition == 'group_unawareness':
-            #     return self.logistic_regression_group_unawareness()
-            # elif fairness_definition == 'disparate_impact':
-            #     return self.logistic_regression_disparate_impact()
-            # elif fairness_definition == 'equal_opportunity':
-            #     return self.logistic_regression_equal_opportunity()
-            # elif fairness_definition == 'equal_odds':
-            #     return self.logistic_regression_equal_odds()
-            # elif fairness_definition == 'positive_predictive_value_parity':
-            #     return self.logistic_regression_positive_predictive_value_parity()
-            # elif fairness_definition == 'false_positive_ratio_parity':
-            #     return self.logistic_regression_false_positive_ratio_parity()
-            # elif fairness_definition == 'negative_predictive_value_parity':
-            #     return self.logistic_regression_negative_predictive_value_parity()
+            #     return logistic_regression_prejudice_remover(self.df_path, self.target_variable, self.sensitive_attribute, self.learning_rate, self.lambda_fairness, self.num_epochs, self.batch_size)
+            elif fairness_definition == 'equalized_odds':
+                return logistic_regression_equalized_odds_reductions(self.df_path, self.target_variable, self.sensitive_attribute, self.learning_rate, self.lambda_fairness, self.num_epochs, self.batch_size)
+            elif fairness_definition == 'equal_opportunity':
+                return logistic_regression_equal_opportunity_reductions(self.df_path, self.target_variable, self.sensitive_attribute, self.learning_rate, self.lambda_fairness, self.num_epochs, self.batch_size)
+            elif fairness_definition == 'false_positive_rate_parity':
+                return logistic_regression_false_positive_rate_parity_reductions(self.df_path, self.target_variable, self.sensitive_attribute, self.learning_rate, self.lambda_fairness, self.num_epochs, self.batch_size)
+            elif fairness_definition == 'error_rate_parity':
+                return logistic_regression_error_rate_parity_reductions(self.df_path, self.target_variable, self.sensitive_attribute, self.learning_rate, self.lambda_fairness, self.num_epochs, self.batch_size)
             else:
                 return "Error: Invalid fairness definition."
         # elif model_type == 'perceptron':
@@ -88,23 +69,23 @@ class TrainingModels:
         #         return self.perceptron_negative_predictive_value_parity()
         #     else:
         #         return "Error: Invalid fairness definition."
-        # elif model_type == 'neural_network':
-        #     if fairness_definition == 'group_unawareness':
-        #         return self.neural_network_group_unawareness()
-        #     elif fairness_definition == 'demographic_parity':
-        #         return self.neural_network_demographic_parity()
-        #     elif fairness_definition == 'disparate_impact':
-        #         return self.neural_network_disparate_impact()
-        #     elif fairness_definition == 'equal_opportunity':
-        #         return self.neural_network_equal_opportunity()
-        #     elif fairness_definition == 'equal_odds':
-        #         return self.neural_network_equal_odds()
-        #     elif fairness_definition == 'positive_predictive_value_parity':
-        #         return self.neural_network_positive_predictive_value_parity()
-        #     elif fairness_definition == 'false_positive_ratio_parity':
-        #         return self.neural_network_false_positive_ratio_parity()
-        #     elif fairness_definition == 'negative_predictive_value_parity':
-        #         return self.neural_network_negative_predictive_value_parity()
+        elif model_type == 'neural_network':
+            if fairness_definition == 'group_unawareness':
+                return self.neural_network_group_unawareness()
+            elif fairness_definition == 'demographic_parity':
+                return neural_network_demographic_parity_reductions(self.df_path, self.target_variable, self.sensitive_attribute, self.learning_rate, self.lambda_fairness, self.num_epochs, self.batch_size)
+            elif fairness_definition == 'disparate_impact':
+                return self.neural_network_disparate_impact()
+            elif fairness_definition == 'equal_opportunity':
+                return self.neural_network_equal_opportunity()
+            elif fairness_definition == 'equal_odds':
+                return self.neural_network_equal_odds()
+            elif fairness_definition == 'positive_predictive_value_parity':
+                return self.neural_network_positive_predictive_value_parity()
+            elif fairness_definition == 'false_positive_ratio_parity':
+                return self.neural_network_false_positive_ratio_parity()
+            elif fairness_definition == 'negative_predictive_value_parity':
+                return self.neural_network_negative_predictive_value_parity()
         #     else:
         #         return "Error: Invalid fairness definition."
         else:

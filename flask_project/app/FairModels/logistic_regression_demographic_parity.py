@@ -64,24 +64,7 @@ def logistic_regression_demographic_parity(df, target_variable, sensitive_attrib
             import pdb; pdb.set_trace()
 
         return max_diff
-    # def fairness_penalty(A_one_hot, predictions):
-    #     A_one_hot = tf.cast(A_one_hot, tf.float32)
-    #     predictions = tf.cast(predictions, tf.float32)
-    #     group_predictions = tf.matmul(tf.transpose(A_one_hot), predictions)
-    #     group_counts = tf.reduce_sum(A_one_hot, axis=0)
-    #     group_averages = group_predictions / group_counts[:, tf.newaxis]
-    #     # Check for NaNs
-    #     # tf.debugging.check_numerics(group_predictions, message='Debugging: NaN found in group_predictions')
-    #     # tf.debugging.check_numerics(group_counts, message='Debugging: NaN found in group_counts')
-    #     # tf.debugging.check_numerics(group_averages, message='Debugging: NaN found in group_averages')
-    #     max_diff = tf.reduce_max(group_averages) - tf.reduce_min(group_averages)
-    #     return max_diff
 
-        # group_0_mask = tf.equal(A, 0)
-        # group_1_mask = tf.equal(A, 1)
-        # predictions_0 = tf.boolean_mask(predictions, group_0_mask)
-        # predictions_1 = tf.boolean_mask(predictions, group_1_mask)
-        # return tf.abs(tf.reduce_mean(predictions_0) - tf.reduce_mean(predictions_1))
 
     # Define the custom loss function
 
@@ -117,20 +100,6 @@ def logistic_regression_demographic_parity(df, target_variable, sensitive_attrib
             import pdb; pdb.set_trace()
 
         return total_loss
-    # def loss_fn(y_true, y_pred, A_one_hot):
-    #     y_true = tf.cast(y_true, tf.float32)
-    #     y_pred = tf.cast(y_pred, tf.float32)
-    #     A_one_hot = tf.cast(A_one_hot, tf.float32)
-    #     # lambda_fairness = tf.cast(lambda_fairness, tf.float32)
-    #     epsilon = 1e-7
-    #     log_loss = -tf.reduce_mean(y_true * tf.math.log(y_pred + epsilon) + (1 - y_true) * tf.math.log(1 - y_pred + epsilon))
-
-    #     # Check for NaNs
-    #     #tf.debugging.check_numerics(log_loss, message='Debugging: NaN found in log_loss')
-    #     fairness_loss = fairness_penalty(A_one_hot, y_pred)
-    #     # Check for NaNs
-    #     #tf.debugging.check_numerics(fairness_loss, message='Debugging: NaN found in fairness_loss')
-    #     return log_loss + lambda_fairness * fairness_loss
 
     # Define the optimizer
     optimizer = tf.optimizers.Adam(learning_rate=learning_rate)

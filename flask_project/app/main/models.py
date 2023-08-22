@@ -27,7 +27,7 @@ class FairnessMetrics(db.Model):
     id = db.Column(db.String, primary_key=True)
     model_results_id = db.Column(db.String, db.ForeignKey('model_results.id'))
     fairness_notion = db.Column(db.String)
-    group = db.Column(db.String)
+    # group = db.Column(db.String)
     epoch = db.Column(db.Integer)
     metrics = db.Column(db.JSON)
 

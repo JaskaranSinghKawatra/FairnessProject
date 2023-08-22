@@ -1,25 +1,222 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Model Results</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        /* CSS for the bar plots */
+        .bar-container {
+            width: 100%;
+            margin: 2% 0;
+        }
+
+        .highlight-bar {
+            stroke: black;
+            stroke-width: 2px;
+        }
+
+        details {
+            width: 80%; /* Adjust width as per your preference */
+            margin: 20px auto; /* Center the block and add some vertical spacing */
+            padding: 10px;
+            border: 2px solid #888; /* Border for visual prominence */
+            border-radius: 5px; /* Rounded corners for aesthetics */
+            background-color: #f9f9f9; /* Light background color */
+            font-size: 1.5em; /* Increase font size */
+        }
+
+        details summary {
+            cursor: pointer; /* Indicates that the summary is clickable */
+            padding: 10px 15px; /* Padding for comfort */
+            color: #333; /* Color adjustment */
+            background-color: #eee; /* Background color for the clickable summary */
+            border-radius: 3px; /* Rounded corners for the summary */
+            outline: none; /* Remove default focus outline */
+        }
+
+        details summary:hover {
+            background-color: #ddd; /* Hover effect for interactivity */
+        }
+
+        /* Space between dropdowns */
+        details + details {
+            margin-top: 20px;
+        }
+
+        details.current-fairness {
+            background-color: #d1e7dd; /* Light green background color */
+        }
+
+        details.current-fairness summary {
+            background-color: #a8d5a6; /* Slightly darker green for the summary */
+        }
+
+        details.current-fairness summary:hover {
+            background-color: #8dc08d; /* Dark green for hover effect */
+        }
+
+    </style>
 </head>
+
 <body>
     <h1>Model Results</h1>
-    <div id="plot">{{ plot|safe }}</div>
+    <div id="plot"></div>
+    <button onclick="resetVisualizations()">Reset</button>
+    <div id="fairness-sections">
+        <!-- First, display the current fairness -->
+        <details open class="current-fairness">
+            <summary>{{ current_fairness.replace("_", " ").title() }}</summary>
+            {% for metric in fairness_metrics_mapping[current_fairness] %}
+            <div class="bar-container" id="{{ current_fairness }}-{{ metric }}-plot"></div>
+            {% endfor %}
+        </details>
+        
+        <!-- Then, loop through the remaining fairness definitions -->
+        {% for fairness, metrics in fairness_metrics_mapping.items() %}
+            {% if fairness != current_fairness %}
+                <details>
+                    <summary>{{ fairness.replace("_", " ").title() }}</summary>
+                    {% for metric in metrics %}
+                    <div class="bar-container" id="{{ fairness }}-{{ metric }}-plot"></div>
+                    {% endfor %}
+                </details>
+            {% endif %}
+        {% endfor %}
+    </div>
+    
 
-    <!-- Include the JavaScript that responds to click events -->
     <script>
-        function bindPlotlyClick() {
-            var plotDiv = document.getElementById('plot');
-            var plotlyPlot = plotDiv.getElementsByClassName('js-plotly-plot')[0];
-            plotlyPlot.on('plotly_click', function(data){
-                var modelId = data.points[0].customdata[0];
-                // print('modelId: ' + modelId);
-                window.location.href = "/model_metrics/" + modelId;
+        var metricData = {{ metric_data|tojson|safe }};
+        var modelIds = {{ df['model_id'].tolist()|tojson|safe }};
+        var df = {{ df.to_dict(orient='list')|tojson|safe }};
+        var selectedModels = [];
+        var scatterPlotData;
+        var scatterRawData = {{ scatter_raw_data|tojson|safe }};
+        var scatterLayout = {{ scatter_layout|tojson|safe }};
+        var barEventsBound = false;
+
+        function createScatterPlot() {
+            Plotly.newPlot('plot', scatterRawData, scatterLayout).then(function (plotDiv) {
+                scatterPlotData = plotDiv.data;
+                bindPlotlyClick();
             });
         }
-        window.onload = bindPlotlyClick;
+
+        function bindPlotlyClick() {
+            try {
+                var plotDiv = document.getElementById('plot');
+                plotDiv.on('plotly_click', function (data) {
+                    var modelId = data.points[0].customdata[0];
+                    window.location.href = "/model_metrics/" + modelId;
+                });
+            } catch (error) {
+                console.error("Error while binding plotly click:", error);
+            }
+        }
+
+        function createBarPlots() {
+            for (var metricName in metricData) {
+                var data = [];
+                var groups = Object.keys(metricData[metricName]);
+                groups.forEach(group => {
+                    data.push({
+                        x: modelIds,
+                        y: metricData[metricName][group],
+                        type: 'bar',
+                        name: group,
+                        hoverinfo: 'x+y'
+                    });
+                });
+                var layout = {
+                    title: metricName,
+                    xaxis: {
+                        title: 'Model ID'
+                    },
+                    yaxis: {
+                        title: metricName
+                    },
+                    barmode: 'group'
+                };
+                // Loop through fairness to find out where this metric belongs
+                for (var fairness in {{ fairness_metrics_mapping|tojson|safe }}) {
+                    if ({{ fairness_metrics_mapping|tojson|safe }}[fairness].includes(metricName)) {
+                        Plotly.newPlot(fairness + '-' + metricName + '-plot', data, layout);
+                    }
+                }
+            }
+
+            if (!barEventsBound) {
+                for (var fairness in {{ fairness_metrics_mapping|tojson|safe }}) {
+                    for (var metricName in metricData) {
+                        if ({{ fairness_metrics_mapping|tojson|safe }}[fairness].includes(metricName)) {
+                            var plotElement = document.getElementById(fairness + '-' + metricName + '-plot');
+                            if (plotElement) {
+                                plotElement.on('plotly_click', function(data) {
+                                    console.log("Bar clicked. Model ID:", modelIds[data.points[0].pointNumber]);
+                                    var clickedModelId = modelIds[data.points[0].pointNumber];
+                                    updateVisualizationsForModel(clickedModelId);
+                                });
+                            }
+                        }
+                    }
+                }
+                barEventsBound = true;
+            }
+        }
+        function updateVisualizationsForModel(modelId) {
+            console.log("Updating visualizations for model ID:", modelId);
+            // Check if the clicked model is already selected
+            if (selectedModels.includes(modelId)) {
+                console.log("Model ID is already selected. Removing...");
+                // If it is, remove it from the selectedModels array
+                selectedModels = selectedModels.filter(id => id !== modelId);
+            } else {
+                console.log("Model ID is not selected. Adding...");
+                // Otherwise, add it to the selectedModels array
+                selectedModels.push(modelId);
+            }
+
+            console.log("Current selected models:", selectedModels);
+
+            // Update the opacity of the scatter plot points based on selected models
+            var scatterOpacities = modelIds.map(id => selectedModels.includes(id) ? 1 : 0.2);
+            Plotly.restyle('plot', {'marker.opacity': [scatterOpacities]}, [0]);
+            
+            // Loop through all fairness definitions
+            for (var fairness in {{ fairness_metrics_mapping|tojson|safe }}) {
+                // Loop through all metrics
+                for (var metricName in metricData) {
+                    // If the metric belongs to the current fairness definition
+                    if ({{ fairness_metrics_mapping|tojson|safe }}[fairness].includes(metricName)) {
+                        var groups = Object.keys(metricData[metricName]);
+                        var traceIndex = 0;
+                        groups.forEach(group => {
+                            // Update the opacity of the bars based on selected models
+                            var barOpacities = modelIds.map(id => selectedModels.includes(id) ? 1 : 0.2);
+                            var plotElement = document.getElementById(fairness + '-' + metricName + '-plot');
+                            if (plotElement) {
+                                Plotly.restyle(plotElement, {'marker.opacity': [barOpacities]}, [traceIndex]);
+                                traceIndex++;
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+
+
+        function resetVisualizations() {
+            selectedModels = [];
+            updateVisualizationsForModel(null);
+        }
+
+        window.onload = function () {
+            createScatterPlot();
+            createBarPlots();
+        };
     </script>
 </body>
+
 </html>

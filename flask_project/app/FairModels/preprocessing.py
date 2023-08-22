@@ -42,9 +42,10 @@ def preprocess_data(df_path, target_variable, sensitive_attribute):
     numerical_cols = numerical_cols.drop(cols_to_drop)
     # print("numerical_cols:", numerical_cols)
 
+    """ Note: Removing standard scaling for now if you do this for prejudice remover, you'll have to add standard scaling to that file"""
     preprocessor = ColumnTransformer(
         transformers=[
-            ('num', StandardScaler(), numerical_cols),
+            # ('num', StandardScaler(), numerical_cols),
             ('cat', OneHotEncoder(), categorical_cols_preprocessing)])
     
     le = LabelEncoder()
@@ -83,4 +84,13 @@ def preprocess_data(df_path, target_variable, sensitive_attribute):
     # Split the data into training and test sets
     X_train, X_test, y_train, y_test, A_train, A_test = train_test_split(X, y, A_one_hot, test_size=0.2, random_state=42)
 
-    return X_train, y_train, A_train, X_test, y_test, A_test
+    # Convert the one hot encoded values back to their integer representation
+    A_train_int = one_hot_encoder.inverse_transform(A_train).flatten()
+    A_test_int = one_hot_encoder.inverse_transform(A_test).flatten()
+
+    # Convert the integer representation back to the original values using the inverse of the mapping dictionary
+    inverse_mapping_dict = {v: k for k, v in mapping_dict.items()}
+    A_train_original = np.array([inverse_mapping_dict[val] for val in A_train_int])
+    A_test_original = np.array([inverse_mapping_dict[val] for val in A_test_int])
+
+    return X_train, y_train, A_train, X_test, y_test, A_test, A_train_original, A_test_original

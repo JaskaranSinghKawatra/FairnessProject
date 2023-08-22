@@ -2,30 +2,73 @@
 <html>
 <head>
     <title>Model Metrics</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        /* CSS for the plots */
+        .plot-container {
+            width: 48%; /* Adjust this as needed */
+            float: left; /* This makes the plots float side by side */
+            margin: 1%; /* Some margin for spacing */
+        }
+    </style>
 </head>
 <body>
-    <h1>Model Metrics for ID: {{ metrics.id }}</h1>
-    <table>
-        <tr>
-            <th>Metric</th>
-            <th>Value</th>
-        </tr>
-        <tr>
-            <td>Fairness Notion</td>
-            <td>{{ metrics.fairness_notion }}</td>
-        </tr>
-        <tr>
-            <td>Group</td>
-            <td>{{ metrics.group }}</td>
-        </tr>
-        <tr>
-            <td>Epoch</td>
-            <td>{{ metrics.epoch }}</td>
-        </tr>
-        <tr>
-            <td>Metrics</td>
-            <td>{{ metrics.metrics }}</td>
-        </tr>
-    </table>
+    <h1>Model Metrics for ID: {{ model_id }}</h1>
+
+    <!-- Divs for Plots with added class for styling -->
+    <div id="count-plot" class="plot-container"></div>
+    <div id="balanced_accuracy-plot" class="plot-container"></div>
+    <div id="balanced_acc_error-plot" class="plot-container"></div>
+    <div id="selection_rate-plot" class="plot-container"></div>
+    <div id="false_positive_rate-plot" class="plot-container"></div>
+    <div id="false_positive_error-plot" class="plot-container"></div>
+    <div id="false_negative_rate-plot" class="plot-container"></div>
+    <div id="false_negative_error-plot" class="plot-container"></div>
+
+    <!-- JavaScript Code for Plotting -->
+    <script>
+        window.onload = function() {
+            var metrics = {{ metrics|tojson|safe }};
+            var groups = Object.keys(metrics.count);
+
+            // Generate a dynamic color palette based on the number of groups
+            var colors = Plotly.d3.scale.category10().range();
+            var groupColors = {};
+            groups.forEach((group, index) => {
+                groupColors[group] = colors[index % colors.length];
+            });
+
+            function createPlot(plotId, valueKey, title) {
+                var traces = [{
+                    x: groups,
+                    y: groups.map(group => metrics[valueKey][group]),
+                    type: 'bar',
+                    name: title,
+                    marker: {color: groups.map(group => groupColors[group])},
+                    text: groups.map(group => metrics[valueKey][group].toFixed(2)),
+                    textposition: 'auto',
+                    hoverinfo: 'x+y'
+                }];
+
+                var layout = {
+                    title: title,
+                    xaxis: { title: 'Group' },
+                    yaxis: { title: title },
+                    barmode: 'group'
+                };
+
+                Plotly.newPlot(plotId, traces, layout);
+            }
+
+            createPlot('count-plot', 'count', 'Count per Group');
+            createPlot('balanced_accuracy-plot', 'balanced_accuracy', 'Balanced Accuracy per Group');
+            createPlot('balanced_acc_error-plot', 'balanced_acc_error', 'Balanced Accuracy Error per Group');
+            createPlot('selection_rate-plot', 'selection_rate', 'Selection Rate per Group');
+            createPlot('false_positive_rate-plot', 'false_positive_rate', 'False Positive Rate per Group');
+            createPlot('false_positive_error-plot', 'false_positive_error', 'False Positive Error per Group');
+            createPlot('false_negative_rate-plot', 'false_negative_rate', 'False Negative Rate per Group');
+            createPlot('false_negative_error-plot', 'false_negative_error', 'False Negative Error per Group');
+        };
+    </script>
 </body>
 </html>
