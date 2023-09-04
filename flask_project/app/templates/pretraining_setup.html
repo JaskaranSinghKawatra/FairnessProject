@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h1>Information Required for Training Fair Models</h1>
+  <p>Enter the sensitive attribute</p>
+  <form method='POST' enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    <p>
+      {{ form.sensitive_attribute.label }}<br>
+      {{ form.sensitive_attribute() }}
+    </p>
+    <p>
+      {{ form.target_variable.label }}<br>
+      {{ form.target_variable }}
+    </p>
+    <p>
+      {{ form.model_type.label }}<br>
+      {{ form.model_type }}
+    </p>
+    <p>{{ form.submit() }}</p>
+   </form>
+{% endblock %}
+

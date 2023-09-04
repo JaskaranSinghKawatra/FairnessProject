@@ -27,6 +27,9 @@ import plotly.graph_objs as go
 from plotly.express import scatter
 import plotly.express as px
 import pandas as pd
+import json
+from collections import defaultdict
+import numpy as np
 # from app import socketio
 
 
@@ -36,13 +39,33 @@ import pandas as pd
 UPLOAD_FOLDER = 'main/uploads'
 ALLOWED_EXTENSIONS = set(['csv'])
 
+def get_training_progress(task_ids):
+    progress_sum = 0
+    for task_id in task_ids:
+        task = run_training.AsyncResult(task_id)
+        if task.state == 'PROGRESS':
+            progress_sum += task.info['progress']
+    overall_progress = progress_sum / len(task_ids)
+    message = "Training " + str(overall_progress) + "% complete."
+    return overall_progress, message
+
+def recursive_to_list(item):
+    if isinstance(item, np.ndarray):
+        return item.tolist()
+    elif isinstance(item, dict):
+        return {k: recursive_to_list(v) for k, v in item.items()}
+    elif isinstance(item, list):
+        return [recursive_to_list(i) for i in item]
+    else:
+        return item
+
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def generate_hyperparameters():
-    learning_rate_values = [0.01, 0.1, 1]
-    lambda_fairness_values = [0.1, 1, 10]
+    learning_rate_values = [0.01]
+    lambda_fairness_values = [0.1]
     num_epochs = 100
     batch_size = 32
 
@@ -77,24 +100,24 @@ def index():
             headers = df.columns.tolist()
             session['column_headers'] = headers
             session['file_path'] = save_location  # Save the file path to the session
-            return redirect(url_for('main.scenario_selection'))
+            return redirect(url_for('main.pretraining_setup'))
         
        
     return render_template('index.html', form=form)
 
-@main.route('/scenario_selection', methods=['GET', 'POST'])
-def scenario_selection():
-    form = ScenarioSelectionForm()
-    if form.validate_on_submit():
-        session['scenario'] = form.scenario.data
-        if form.scenario.data == '1':
-            return redirect(url_for('main.scenario_1'))
-        else:
-            return redirect(url_for('main.scenario_2'))
-    return render_template('scenario_selection.html', form=form)
+# @main.route('/scenario_selection', methods=['GET', 'POST'])
+# def scenario_selection():
+#     form = ScenarioSelectionForm()
+#     if form.validate_on_submit():
+#         session['scenario'] = form.scenario.data
+#         if form.scenario.data == '1':
+#             return redirect(url_for('main.scenario_1'))
+#         else:
+#             return redirect(url_for('main.scenario_2'))
+#     return render_template('scenario_selection.html', form=form)
 
-@main.route('/scenario_1', methods=['GET', 'POST'])
-def scenario_1():
+@main.route('/pretraining_setup', methods=['GET', 'POST'])
+def pretraining_setup():
     form = Scenario1Form()
     form.sensitive_attribute.choices = session.get('column_headers', [])
     form.target_variable.choices = session.get('column_headers', [])
@@ -103,16 +126,23 @@ def scenario_1():
             session['sensitive_attribute'] = form.sensitive_attribute.data
             session['target_variable'] = form.target_variable.data
             session['model_type'] = form.model_type.data
+            hyperparameters = generate_hyperparameters()
+            
             task_ids = []
-            task = run_training.delay(session['file_path'], 
-                                          session['target_variable'], 
-                                          session['sensitive_attribute'], 
-                                          session['model_type'], 
-                                          session['fairness_definition'], 
-                                          0.01,
-                                            0.1,
-                                            100,
-                                            32)
+            
+            # Loop through the hyperparameters and call the run_training function for each combination
+            for hyperparam in hyperparameters:
+                task = run_training.delay(
+                    session['file_path'],
+                    session['target_variable'],
+                    session['sensitive_attribute'],
+                    session['model_type'],
+                    session['fairness_definition'],
+                    hyperparam['learning_rate'],
+                    hyperparam['lambda_fairness'],
+                    hyperparam['num_epochs'],
+                    hyperparam['batch_size']
+                )
             task_ids.append(str(task.id))
             session['task_ids'] = task_ids
             return render_template('waiting.html', task_ids=session['task_ids'], form=form)
@@ -120,7 +150,7 @@ def scenario_1():
         else:
             flash('The sensitive attribute and target variable cannot be the same.')
 
-    return render_template('scenario_1.html', form=form)
+    return render_template('pretraining_setup.html', form=form)
 
 
         
@@ -180,93 +210,138 @@ def results():
 
 @main.route('/results/<model_type>', methods=['GET'])
 def show_model_results(model_type):
+    fairness_metrics_mapping = {
+    "equal_opportunity": ["true_positive_rate"],
+    "equalized_odds": ["true_positive_rate", "false_positive_rate"],
+    "demographic_parity": ["selection_rate"],
+    "false_positive_rate_parity": ["false_positive_rate"],
+    "error_rate_parity": ["true_negative_error", "false_positive_error"]
+}
     # Query the database for the model results
     results = ModelResults.query.filter_by(model_class=model_type).all()
+    # fair_results = FairnessMetrics.query.filter_by(model_results_id=result.id).first().metrics
+
+    groups = defaultdict(list)
+    for result in results:
+        key = (result.model_accuracy, result.fairness_score, result.learning_rate, result.lambda_fairness)
+        groups[key].append(result)
+    # Select representative models
+    representative_models = []
+    for key, group_models in groups.items():
+        # Here, we're simply taking the first model as the representative.
+        # You can modify this to select based on other criteria.
+        representative_model = group_models[0]
+        representative_models.append(representative_model)
+    
+    metrics = {}
+    model_signatures = set()  # A set to keep track of unique metric signatures
+    filtered_models = [] 
+
+    for model in representative_models:
+        fair_metric = FairnessMetrics.query.filter_by(model_results_id=model.id).first()
+        if fair_metric:
+            # Generate a unique signature for the model based on its metric values
+            signature = str(sorted(fair_metric.metrics.items()))
+            if signature not in model_signatures:
+                metrics[model.id] = fair_metric.metrics
+                model_signatures.add(signature)
+                filtered_models.append(model)
+
+    representative_models = filtered_models
+
+    # Define the expected metrics and groups
+    expected_metrics = set([metric_name for model in metrics.values() for metric_name in model.keys()])
+    expected_groups = set([group for model in metrics.values() for metric in model.values() for group in metric.keys()])
+
+    # Initialize the metric_data dictionary
+    metric_data = {metric_name: {group: [] for group in expected_groups} for metric_name in expected_metrics}
+
+    for model in representative_models:
+        model_id = model.id
+        model_metrics = metrics.get(model_id, {})
+        
+        for metric_name in expected_metrics:
+            for group in expected_groups:
+                value = model_metrics.get(metric_name, {}).get(group, None)  # Use None as a placeholder for missing values
+                metric_data[metric_name][group].append(value)
+    # Populate the metric_data dictionary
+                # metric_data[metric_name][group].append(value)
 
     # Prepare the data for the scatter plot
     data = [{
-            'model_id': result.id,
-            'model_accuracy': result.model_accuracy, 
-             'fairness_score': result.fairness_score, 
-             'learning_rate': result.learning_rate, 
-             'lambda_fairness': result.lambda_fairness} for result in results]
-    df = pd.DataFrame(data)
-    print("Model ID:", df['model_id'].tolist())
-
+        'model_id': model.id,
+        'epochs': model.num_epochs,
+        'balanced_error': model.model_accuracy, 
+         'fairness_score': model.fairness_score, 
+         'learning_rate': model.learning_rate, 
+         'error_bound_epsilon': model.lambda_fairness} for model in representative_models]
+    df = pd.DataFrame(data)    
     # Create the scatter plot
-    fig = px.scatter(df, x='fairness_score', y='model_accuracy',
-                     size='model_accuracy', hover_data=['learning_rate', 'lambda_fairness'],
+    fig = px.scatter(df, x='balanced_error', y='fairness_score',
+                    hover_data=['error_bound_epsilon'],
                      custom_data=['model_id'],
+                     color_discrete_sequence=['black'],  # This sets the color sequence to just black
+                    color=df['model_id']*0,
                      labels={'fairness_score': 'Fairness Metric (Lower is Better)',
-                             'model_accuracy': 'Model Accuracy (Higher is Better)',
+                             'model_accuracy': 'Error Rate (Lower is Better)',
                              },
-                     title='Accuracy vs. Fairness with Hover Tooltip')
+                     title='Error Rate vs. Demographic Parity Difference with Hover Tooltip',
+                     )
 
-    # Convert the plot to HTML
-    plot_html = plotly.offline.plot(fig, include_plotlyjs = True, output_type = 'div')
+    fig.update_traces(marker=dict(size=8))
 
-    return render_template('model_results.html', plot = plot_html)
-
-
-# @main.route('/results/<model_type>', methods=['GET'])
-# def show_model_results(model_type):
-#     # Query the database for the model results
-#     results = ModelResults.query.filter_by(model_class=model_type).all()
-
-#     # Prepare the data for the scatter plot
-#     data = [{'model_id': result.id, 
-#              'model_accuracy': result.model_accuracy, 
-#              'fairness_score': result.fairness_score, 
-#              'learning_rate': result.learning_rate, 
-#              'lambda_fairness': result.lambda_fairness} for result in results]
-#     df = pd.DataFrame(data)
-
-#     # Create the scatter plot
-#     fig = px.scatter(df, x='fairness_score', y='model_accuracy',
-#                      size='model_accuracy', hover_data=['learning_rate', 'lambda_fairness'],
-#                      labels={'fairness_score': 'Fairness Metric (Lower is Better)',
-#                              'model_accuracy': 'Model Accuracy (Higher is Better)',
-#                              },
-#                      title='Accuracy vs. Fairness with Hover Tooltip')
+    print("Number of traces in the scatter plot:", len(fig.data))
+    scatter_data = fig.to_dict()["data"][0]
+    scatter_data = recursive_to_list(scatter_data)
+    scatter_raw_data = [trace.to_plotly_json() for trace in fig.data]
+    scatter_raw_data = recursive_to_list(scatter_raw_data)
+    scatter_layout = fig.layout.to_plotly_json()
+    scatter_layout = recursive_to_list(scatter_layout)
     
-    # Add click events to the markers
-    # for trace in fig.data:
-    #     trace['customdata'] = df['model_id']
-    #     trace['hovertemplate'] = '<b>Model ID</b>: %{customdata}<br>' + trace['hovertemplate']
-    #     trace['mode'] = 'markers+text'
-    #     trace['text'] = df['model_id'].tolist()
-    #     trace['textposition'] = 'top center'
+    return render_template('model_results.html', scatter_raw_data=scatter_raw_data, scatter_layout=scatter_layout, metric_data=metric_data, df=df, scatter_data=scatter_data, fairness_metrics_mapping=fairness_metrics_mapping, current_fairness=session['fairness_definition'])
 
-    # # Convert the plot to HTML
-    # plot_html = plotly.offline.plot(fig, include_plotlyjs = True, output_type = 'div')
-
-    # return render_template('model_results.html', plot = plot_html)
 
 @main.route('/model_metrics/<model_id>', methods=['GET'])
 def show_model_metrics(model_id):
-    # Fetch the model's fairness metrics from the database
-    model_metrics = FairnessMetrics.query.filter_by(model_results_id=model_id).first_or_404()
+    # Fetch the latest (or any specific) model's fairness metrics from the database
+    model_metric = FairnessMetrics.query.filter_by(model_results_id=model_id).first()
+
+    if not model_metric:
+        # Handle case where no metrics are found for the given model_id
+        # This is just an example. Modify as per your application's error handling strategy.
+        return "No metrics found for the given model ID", 404
 
     # Render a template that displays the metrics
-    return render_template('model_metrics.html', metrics=model_metrics)
+    return render_template('model_metrics.html', metrics=model_metric.metrics, model_id=model_id)
+
+
+
+
 
 
 
 
 # Route to check the status of the tasks
 
-
 @main.route('/check_tasks', methods=['POST'])
 def check_tasks():
     task_ids = request.json['task_ids']
     tasks_finished = all(celery.AsyncResult(task_id).ready() for task_id in task_ids)
+
+    # Get the current progress and status message
+    progress, message = get_training_progress(task_ids)
+
     if tasks_finished:
         model_type = session['model_type']
-        print("Model Type:", model_type)
         redirect_url = url_for('main.show_model_results', model_type=model_type)
     else:
         redirect_url = None
-    return jsonify(tasks_finished=tasks_finished, redirect_url=redirect_url)
+
+    return jsonify(tasks_finished=tasks_finished, redirect_url=redirect_url, progress=progress, message=message)
+
+
+
+
 
 
 

@@ -1,19 +1,26 @@
 {% extends 'base.html' %}
 
 {% block content %}
-  <h1>Home Page</h1>
-  <form method='POST' enctype="multipart/form-data">
-    {{ form.hidden_tag() }}
+  <div class="card p-4" style="max-width: 100%;">
+    <h1 class="text-center mb-4">Home Page</h1>
+    <form method='POST' enctype="multipart/form-data">
+      {{ form.hidden_tag() }}
 
-    {% for subfield in form.fairness_definition %}
-      <div>
-        <input type="radio" id="{{ subfield.id }}" name="{{ subfield.name }}" value="{{ subfield.data }}">
-        <label for="{{ subfield.id }}">{{ subfield.label.text }}</label>
-        <p>{{ form.fairness_definitions[subfield.data] }}</p>
+      {% for subfield in form.fairness_definition %}
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="radio" id="{{ subfield.id }}" name="{{ subfield.name }}" value="{{ subfield.data }}">
+          <label class="form-check-label" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
+          <p class="ml-4">{{ form.fairness_definitions[subfield.data] }}</p>
+        </div>
+      {% endfor %}
+
+      <div class="form-group mt-3">
+        <label for="{{ form.file_upload.id }}">{{ form.file_upload.label }}</label>
+        {{ form.file_upload(class="form-control-file") }}
       </div>
-    {% endfor %}
-
-    {{ form.file_upload.label }} {{ form.file_upload() }}<br>
-    <input type='submit' value='Submit'>
-  </form>
+      <div class="form-group mt-3 text-center">
+        <input type='submit' value='Submit' class="btn btn-custom">
+      </div>
+    </form>
+  </div>
 {% endblock %}

@@ -26,8 +26,8 @@ def calculate_fairness_metrics_multigroup(y_true, y_pred, A_one_hot):
         demographic_parity_ratios = {}
         for b in unique_A:
             if a != b:
-                demographic_parity_differences[b] = predictive_rates[a] - predictive_rates[b]
-                demographic_parity_ratios[b] = predictive_rates[a] / (predictive_rates[b] + 1e-7)
+                demographic_parity_differences[a] = predictive_rates[a] - predictive_rates[b]
+                demographic_parity_ratios[a] = predictive_rates[a] / (predictive_rates[b] + 1e-7)
         fairness_metrics[a] = (demographic_parity_differences, demographic_parity_ratios)
     return fairness_metrics
 

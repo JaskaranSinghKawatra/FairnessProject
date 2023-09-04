@@ -2,6 +2,7 @@
 
 {% block content %}
     <h1>Please wait while the models are being trained...</h1>
+    <div id="progress-message"></div>
 
     <script>
     var task_ids = '{{ session["task_ids"] | join(",") }}'.split(',');
@@ -22,7 +23,8 @@
                 window.location.href = data.redirect_url;
             }
             else {
-                // If tasks are not finished, check again after 5 seconds
+                // Update the message and check again after 5 seconds
+                document.getElementById('progress-message').innerText = data.message;
                 setTimeout(checkTasks, 5000);
             }
         })
