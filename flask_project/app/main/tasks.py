@@ -1,15 +1,6 @@
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
-import pandas as pd
 from app import celery
-import tensorflow as tf
-import numpy as np
-import time
 from app.FairModels.training_models import TrainingModels
-import multiprocessing as mp
-from itertools import product
-from multiprocessing import Pool
+
 
 # @celery.task(bind=True)
 # def run_training(self, file_path, target_variable, sensitive_attribute, model_type, fairness_definition):

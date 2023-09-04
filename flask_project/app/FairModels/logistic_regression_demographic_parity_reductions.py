@@ -220,12 +220,6 @@ def logistic_regression_demographic_parity_reductions(df, target_variable, sensi
             return [metric(Y_test, Y_sweep) for Y_sweep in all_predictions]
 
     def model_performance_sweep(models_dict, X_test, y_test, A_test):
-        """Compute the equalized_odds_difference and balanced_error_rate for a given
-        list of inner models learned by the ExponentiatedGradient algorithm.
-        Return a DataFrame containing the epsilon level of the model, the index
-        of the model, the equalized_odds_difference, and the balanced_error_rate for
-        the model.
-        """
         performances = []
         for eps, models in models_dict.items():
             dem_parity_difference = aggregate_predictor_performances(

@@ -15,28 +15,19 @@ def preprocess_data(df_path, target_variable, sensitive_attribute):
     numerical_cols = df.select_dtypes(include=[np.number]).columns
     categorical_cols = df.select_dtypes(include=['object','string']).columns
 
-    # print("numerical_cols:", numerical_cols)
-    # print("categorical_cols:", categorical_cols)
 
     # Get sets of unique counts for each type of column
     num_unique_counts = set(df[numerical_cols].nunique())
     cat_unique_counts = set(df[categorical_cols].nunique())
-
-    # print("num_unique_counts:", num_unique_counts)
-    # print("cat_unique_counts:", cat_unique_counts)
 
     # Ensure target variable and sensitive attribute are not included in the numerical and categorical columns
     numerical_cols = numerical_cols.drop(target_variable) if target_variable in numerical_cols else numerical_cols
     numerical_cols = numerical_cols.drop(sensitive_attribute) if sensitive_attribute in numerical_cols else numerical_cols
     categorical_cols_preprocessing = categorical_cols.drop([target_variable, sensitive_attribute])
 
-    # print("numerical_cols:", numerical_cols)
-    # print("categorical_cols_preprocessing:", categorical_cols_preprocessing)
-    
     # Identify numerical columns to drop based on matching unique counts
     cols_to_drop = [col for col in numerical_cols if df[col].nunique() in cat_unique_counts]
 
-    # print("cols_to_drop:", cols_to_drop)
 
     # Update numerical columns by dropping identified columns
     numerical_cols = numerical_cols.drop(cols_to_drop)
@@ -54,24 +45,17 @@ def preprocess_data(df_path, target_variable, sensitive_attribute):
         if df[column].dtype == 'object':
             df[column] = df[column].astype(str)
 
-    # print("df columns:", df.columns)
-    # print("df numerical columns:", df[numerical_cols].columns)
-    # print("df categorical columns:", df[categorical_cols_preprocessing].columns)
 
     # Separate the features and target
 
     X = preprocessor.fit_transform(df.drop(columns=[target_variable, sensitive_attribute]))
     y = le.fit_transform(df[target_variable]).astype(np.float32)    
 
-    # X = df.drop(columns=[target_variable, sensitive_attribute]).values.astype(np.float32)
-    # y = df[target_variable].values.astype(np.float32)
     
     # Get unique values for the sensitive attribute and create a mapping
     unique_values = df[sensitive_attribute].unique()
-    # print("Unique Values in DataFrame: ", unique_values)
 
     mapping_dict = {value: i for i, value in enumerate(unique_values)}
-    # print("Mapping Dictionary: ", mapping_dict)
 
     
     

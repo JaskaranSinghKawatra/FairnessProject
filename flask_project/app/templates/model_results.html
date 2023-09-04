@@ -63,6 +63,7 @@
     <h1>Model Results</h1>
     <div id="plot"></div>
     <button onclick="resetVisualizations()">Reset</button>
+    <button id="save-dashboard">Save Dashboard</button>
     <div id="fairness-sections">
         <!-- First, display the current fairness -->
         <details open class="current-fairness">
@@ -216,6 +217,16 @@
             createScatterPlot();
             createBarPlots();
         };
+    </script>
+    <script>
+    document.getElementById('save-dashboard').addEventListener('click', function() {
+        var blob = new Blob([document.documentElement.outerHTML], {type: 'text/html'});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'dashboard.html';
+        a.click();
+    });
     </script>
 </body>
 
